@@ -150,7 +150,7 @@ class SlackChatApp:
         response = requests.request(method, url, headers=headers, json=data)
         return response.json()
 
-    def update_home_tab(self, client, event, logger):
+    def update_home_tab(self, client, event):
         try:
             client.views_publish(
                 user_id=event["user"],
@@ -188,77 +188,80 @@ class SlackChatApp:
         except Exception as e:
             logger.error(f"Error publishing home tab: {e}")
 
-    def handle_app_mentions(self, body, say, logger, client):
-        logger.info(body)
-
+    def handle_app_mentions(self, body, say, client):
+        print("Coming here")
         client.reactions_add(
             channel=body["event"]["channel"],
             name="brain",
             timestamp=body["event"]["ts"],
         )
-
+        logger.info(f"Hanlding app mention")
+        logger.info(f"Question is {body['event']['text']}")
+        logger.info(f"Thread is {body['event']['ts']}")
         self.set_question(body["event"]["ts"], body["event"]["text"])
 
-        brains_response = self.make_quivr_api_request("GET", "/brains/")
-        brains = brains_response.get("brains", [])
-        # limit to 24 brains
-        brains = brains[:24]
+        # Check if brain is already set for this thread
+        # Check if thread_ts is in the event payload, if not, use the ts from the event
+        thread_ts = body["event"].get("thread_ts", body["event"]["ts"])
+        brain_id = self.get_brain_id(thread_ts)
+        logger.info(f"Brain ID: {brain_id}")
 
-        if not brains:
-            say("No brains found. Please create a brain first.")
-            return
+        if not brain_id:
 
-        # Create a button for each brain and an 'Any brain' button
-        brain_buttons = [
-            {
-                "type": "button",
-                "text": {"type": "plain_text", "text": brain["name"]},
-                "action_id": f"brain_{brain['id']}",
-            }
-            for brain in brains
-        ]
-        brain_buttons.append(
-            {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "Any brain"},
-                "action_id": "brain_any",
-            }
-        )
+            brains_response = self.make_quivr_api_request("GET", "/brains/")
+            brains = brains_response.get("brains", [])
+            # limit to 24 brains
+            brains = brains[:24]
 
-        # Send a message with the buttons
-        client.chat_postMessage(
-            channel=body["event"]["channel"],
-            text="Please select a brain:",
-            blocks=[
+            if not brains:
+                say("No brains found. Please create a brain first.")
+                return
+
+            # Create a button for each brain and an 'Any brain' button
+            brain_buttons = [
                 {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": "Available brains:"},
-                },
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": brain["name"]},
+                    "action_id": f"brain_{brain['id']}",
+                }
+                for brain in brains
+            ]
+            brain_buttons.append(
                 {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "\n".join([f"• {brain['name']}" for brain in brains]),
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Any brain"},
+                    "action_id": "brain_any",
+                }
+            )
+
+            # Send a message with the buttons
+            client.chat_postMessage(
+                channel=body["event"]["channel"],
+                text="Please select a brain:",
+                blocks=[
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "Available brains:"},
                     },
-                },
-                {
-                    "type": "actions",
-                    "elements": brain_buttons,
-                },
-            ],
-            thread_ts=body["event"]["ts"],
-        )
+                    {
+                        "type": "actions",
+                        "elements": brain_buttons,
+                    },
+                ],
+                thread_ts=body["event"]["ts"],
+            )
+        else:
+            self.ask_question(
+                body, brain_id, body["event"]["ts"], question=body["event"]["text"]
+            )
 
-    def handle_brain_selection(self, ack, body, logger):
-        ack()
+    def ask_question(self, body, brain_id, thread_ts, question=None):
+        logger.info(body)
 
-        brain_id = None
-        action_id = body["actions"][0]["action_id"]
-        if action_id.startswith("brain_"):
-            brain_id = action_id.split("_")[1]
-
-        thread_ts = body["message"]["thread_ts"]
-        self.set_brain_id(thread_ts, brain_id)
+        # Extract the question from the body
+        text = body["event"]["text"]
+        bot_id = f"<@{self.app.client.auth_test()['user_id']}>"
+        question = text.replace(bot_id, "").strip()
 
         chat_id = self.get_chat_id(thread_ts)
         if not chat_id:
@@ -267,8 +270,9 @@ class SlackChatApp:
             chat_id = chat_response["chat_id"]
             self.set_chat_id(thread_ts, chat_id)
 
-        logger.info(body["message"]["text"])
-        question = self.get_question(thread_ts)
+        logger.debug(question)
+        # If question is not provided, get it from the database
+
         question_data = {
             "question": question,
             "brain_id": brain_id,
@@ -280,16 +284,29 @@ class SlackChatApp:
         logger.debug(question_response)
         if "assistant" in question_response:
             self.app.client.chat_postMessage(
-                channel=body["channel"]["id"],
+                channel=body["event"]["channel"],
                 text=question_response["assistant"],
                 thread_ts=thread_ts,
             )
         else:
             self.app.client.chat_postMessage(
-                channel=body["channel"]["id"],
+                channel=body["event"]["channel"],
                 text="Sorry, I couldn't find an answer.",
                 thread_ts=thread_ts,
             )
+
+    def handle_brain_selection(self, ack, body):
+        ack()
+
+        brain_id = None
+        action_id = body["actions"][0]["action_id"]
+        if action_id.startswith("brain_"):
+            brain_id = action_id.split("_")[1]
+
+        thread_ts = body["message"]["thread_ts"]
+        self.set_brain_id(thread_ts, brain_id)
+        print(f"Brain ID Set: {brain_id}")
+        self.ask_question(body, brain_id, thread_ts)
 
 
 # FastAPI app setup
@@ -311,7 +328,6 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
     ## URL decoding
     body = await req.body()
     body_decoded = urllib.parse.unquote(body.decode("utf-8"))
-    print(body_decoded)
     payload = json.loads(body_decoded.split("payload=")[1])
 
     ack()  # Acknowledge the request
@@ -322,6 +338,7 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
         brain_id = action_id.split("_")[1]
 
     thread_ts = payload["container"]["thread_ts"]
+    logger.info(f"Thread TS: {thread_ts}")
     slack_chat_app.set_brain_id(thread_ts, brain_id)
 
     chat_id = slack_chat_app.get_chat_id(thread_ts)
@@ -362,4 +379,4 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="debug", reload=True)
+    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="info", reload=True)
