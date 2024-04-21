@@ -16,7 +16,7 @@ import urllib.parse
 import json
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # Quivr API configuration
 QUIVR_API_BASE_URL = "https://api.quivr.app"
