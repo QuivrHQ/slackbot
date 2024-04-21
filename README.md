@@ -10,6 +10,12 @@ This Slack bot allows users to ask questions to a Quivr brain directly from Slac
 
 ## Installation
 
+
+
+https://github.com/QuivrHQ/slackbot/assets/19614572/93c71be0-d97f-4623-b443-4b2583f06b89
+
+
+
 1. Clone the repository:
    ```
    git clone https://github.com/quivrHQ/slackbot.git
