@@ -226,13 +226,14 @@ class SlackChatApp:
                 }
                 for brain in brains
             ]
-            brain_buttons.append(
+            ## Action ID should be a null UUID with only zeros
+            any_brain = [
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": "Any brain"},
-                    "action_id": "brain_any",
+                    "action_id": "00000000-0000-0000-0000-000000000000",
                 }
-            )
+            ]
 
             # Send a message with the buttons
             client.chat_postMessage(
@@ -250,6 +251,19 @@ class SlackChatApp:
                 ],
                 thread_ts=body["event"]["ts"],
             )
+
+            client.chat_postMessage(
+                channel=body["event"]["channel"],
+                text="Or select any brain:",
+                blocks=[
+                    {
+                        "type": "actions",
+                        "elements": any_brain,
+                    },
+                ],
+                thread_ts=body["event"]["ts"],
+            )
+
         else:
             self.ask_question(
                 body, brain_id, body["event"]["ts"], question=body["event"]["text"]
@@ -273,6 +287,8 @@ class SlackChatApp:
         logger.debug(question)
         # If question is not provided, get it from the database
 
+        if brain_id == "00000000-0000-0000-0000-000000000000":
+            brain_id = None
         question_data = {
             "question": question,
             "brain_id": brain_id,
@@ -305,7 +321,7 @@ class SlackChatApp:
 
         thread_ts = body["message"]["thread_ts"]
         self.set_brain_id(thread_ts, brain_id)
-        print(f"Brain ID Set: {brain_id}")
+        logger.info(f"Brain ID Set: {brain_id}")
         self.ask_question(body, brain_id, thread_ts)
 
 
