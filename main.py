@@ -97,7 +97,6 @@ class SlackChatApp:
     def register_event_handlers(self):
         self.app.event("app_home_opened")(self.update_home_tab)
         self.app.event("app_mention")(self.handle_app_mentions)
-        self.app.action(re.compile(r"^brain_"))(self.handle_brain_selection)
 
     def get_chat_id(self, thread_ts):
         conn = sqlite3.connect(self.config.db_name)
@@ -132,6 +131,7 @@ class SlackChatApp:
 
     def set_brain_id(self, thread_ts, brain_id):
         conn = sqlite3.connect(self.config.db_name)
+        logger.info(f"Setting brain ID: {brain_id} for thread: {thread_ts}")
         c = conn.cursor()
         c.execute(
             "INSERT OR REPLACE INTO thread_brain_mapping VALUES (?, ?)",
@@ -140,14 +140,19 @@ class SlackChatApp:
         conn.commit()
         conn.close()
 
-    def make_quivr_api_request(self, method, endpoint, data=None):
+    def make_quivr_api_request(self, method, endpoint, data=None, params=None):
+        logger.info(f"Making Quivr API request: {method} {endpoint}")
+        logger.info(f"Data: {data}")
+        logger.info(f"Params: {params}")
         headers = {
             "accept": "application/json",
             "Authorization": f"Bearer {self.config.quivr_api_key}",
             "Content-Type": "application/json",
         }
         url = f"{self.config.quivr_api_base_url}{endpoint}"
-        response = requests.request(method, url, headers=headers, json=data)
+        response = requests.request(
+            method, url, headers=headers, json=data, params=params
+        )
         return response.json()
 
     def update_home_tab(self, client, event):
@@ -286,15 +291,15 @@ class SlackChatApp:
 
         logger.debug(question)
         # If question is not provided, get it from the database
-
+        params = {}
         if brain_id == "00000000-0000-0000-0000-000000000000":
             brain_id = None
+        params = {"brain_id": brain_id}
         question_data = {
             "question": question,
-            "brain_id": brain_id,
         }
         question_response = self.make_quivr_api_request(
-            "POST", f"/chat/{chat_id}/question", data=question_data
+            "POST", f"/chat/{chat_id}/question", data=question_data, params=params
         )
 
         logger.debug(question_response)
@@ -310,19 +315,6 @@ class SlackChatApp:
                 text="Sorry, I couldn't find an answer.",
                 thread_ts=thread_ts,
             )
-
-    def handle_brain_selection(self, ack, body):
-        ack()
-
-        brain_id = None
-        action_id = body["actions"][0]["action_id"]
-        if action_id.startswith("brain_"):
-            brain_id = action_id.split("_")[1]
-
-        thread_ts = body["message"]["thread_ts"]
-        self.set_brain_id(thread_ts, brain_id)
-        logger.info(f"Brain ID Set: {brain_id}")
-        self.ask_question(body, brain_id, thread_ts)
 
 
 # FastAPI app setup
@@ -340,7 +332,7 @@ async def endpoint(req: Request):
 
 @api.post("/slack/interactive")
 async def interactive(req: Request, ack: Ack = Depends(Ack)):
-    print("Received interactive request")
+    logger.info("Received interactive request")
     ## URL decoding
     body = await req.body()
     body_decoded = urllib.parse.unquote(body.decode("utf-8"))
@@ -355,10 +347,12 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
 
     thread_ts = payload["container"]["thread_ts"]
     logger.info(f"Thread TS: {thread_ts}")
+    logger.info(f"Interactive Brain ID: {brain_id}")
     slack_chat_app.set_brain_id(thread_ts, brain_id)
 
     chat_id = slack_chat_app.get_chat_id(thread_ts)
     if not chat_id:
+        logger.info("Creating chat")
         chat_data = {"name": "Slack Chat"}
         chat_response = slack_chat_app.make_quivr_api_request(
             "POST", "/chat", data=chat_data
@@ -367,15 +361,19 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
         slack_chat_app.set_chat_id(thread_ts, chat_id)
 
     question = slack_chat_app.get_question(thread_ts)
+    params = {}
+    if brain_id == "00000000-0000-0000-0000-000000000000":
+        brain_id = None
+    params = {"brain_id": brain_id}
     question_data = {
         "question": question,
-        "brain_id": brain_id,
     }
     question_response = slack_chat_app.make_quivr_api_request(
-        "POST", f"/chat/{chat_id}/question", data=question_data
+        "POST", f"/chat/{chat_id}/question", data=question_data, params=params
     )
 
-    logger.debug(question_response)
+    logger.debug(question_response["assistant"])
+    logger.debug(f"Brain ID: {question_response.get('brain_id')}")
     if "assistant" in question_response:
         slack_chat_app.app.client.chat_postMessage(
             channel=payload["channel"]["id"],
