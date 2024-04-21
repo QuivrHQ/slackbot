@@ -29,12 +29,31 @@ This Slack bot allows users to ask questions to a Quivr brain directly from Slac
      QUIVR_API_KEY=your-quivr-api-key
      ```
 
+4. Set up a Slack app:
+   - Create a new Slack app.
+   - Add a bot user to the app.
+   - Install the app to your workspace.
+   - Copy the bot token and signing secret to the `.env` file.
+
+5. Go to your Quivr account:
+   - Go to the user settings page.
+   - Copy the API key to the `.env` file.
+
 ## Usage
 
 1. Start the bot:
    ```
+   ngrok http 1234
+   ```
+   This will create a public URL that you can use to expose the bot to the internet.
+   ```
    uvicorn main:api --reload --port 1234
    ```
+2. Set up the Slack app:
+   - Go to the Slack app settings page.
+   - Add the public URL as the request URL for the Slack app.
+   - Subscribe to the `app_mention` event.
+   - Save the changes.
 
 2. Invite the bot to a Slack channel.
 
