@@ -195,7 +195,7 @@ class SlackChatApp:
 
     def handle_app_mentions(self, body, say, client):
         print("Coming here")
-        client.reactions_add(
+        self.app.client.reactions_add(
             channel=body["event"]["channel"],
             name="brain",
             timestamp=body["event"]["ts"],
@@ -273,6 +273,16 @@ class SlackChatApp:
             self.ask_question(
                 body, brain_id, body["event"]["ts"], question=body["event"]["text"]
             )
+        self.app.client.reactions_remove(
+            channel=body["event"]["channel"],
+            name="brain",
+            timestamp=body["event"]["ts"],
+        )
+        self.app.client.reactions_add(
+            channel=body["event"]["channel"],
+            name="white_check_mark",
+            timestamp=body["event"]["ts"],
+        )
 
     def ask_question(self, body, brain_id, thread_ts, question=None):
         logger.info(body)
