@@ -353,9 +353,31 @@ class SlackChatApp:
 
         logger.debug(question_response)
         if "assistant" in question_response:
+            if "metadata" in question_response:
+                if "sources" in question_response["metadata"]:
+                    sources = question_response["metadata"]["sources"][:3]
+                    source_text = "\n".join(
+                        [
+                            f"- <{source['source_url']}|{source['name']}>"
+                            for source in sources
+                        ]
+                    )
+                    question_response["assistant"] += f"\n\n*Sources:*\n{source_text}"
+
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": question_response["assistant"],
+                    },
+                }
+            ]
+
             self.app.client.chat_postMessage(
                 channel=body["event"]["channel"],
                 text=question_response["assistant"],
+                blocks=blocks,
                 thread_ts=thread_ts,
             )
         else:
@@ -418,9 +440,31 @@ class SlackChatApp:
                     channel=payload["channel"]["id"],
                     ts=message[0],
                 )
+            if "metadata" in question_response:
+                if "sources" in question_response["metadata"]:
+                    sources = question_response["metadata"]["sources"]
+                    source_text = "\n".join(
+                        [
+                            f"- <{source['source_url']}|{source['name']}>"
+                            for source in sources
+                        ]
+                    )
+                    question_response["assistant"] += f"\n\n*Sources:*\n{source_text}"
+
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": question_response["assistant"],
+                    },
+                }
+            ]
+
             self.app.client.chat_postMessage(
                 channel=payload["channel"]["id"],
                 text=question_response["assistant"],
+                blocks=blocks,
                 thread_ts=thread_ts,
             )
             self.set_brain_id(thread_ts, question_response.get("brain_id"))
