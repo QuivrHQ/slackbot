@@ -459,4 +459,4 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="info", reload=True)
+    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="warning", reload=True)
