@@ -70,6 +70,37 @@ class SlackChatApp:
             )
         """
         )
+        ### Create a table for saving interactive message id with thread_ts as primary key
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS thread_interactive_mapping (
+                interactive_message_id TEXT PRIMARY KEY,
+                thread_ts TEXT
+
+            )
+        """
+        )
+        conn.commit()
+        conn.close()
+
+    def get_all_interactive_message_ids_for_thread(self, thread_ts):
+        conn = sqlite3.connect(self.config.db_name)
+        c = conn.cursor()
+        c.execute(
+            "SELECT interactive_message_id FROM thread_interactive_mapping WHERE thread_ts = ?",
+            (thread_ts,),
+        )
+        result = c.fetchall()
+        conn.close()
+        return result
+
+    def set_interactive_message_id(self, thread_ts, interactive_message_id):
+        conn = sqlite3.connect(self.config.db_name)
+        c = conn.cursor()
+        c.execute(
+            "INSERT OR REPLACE INTO thread_interactive_mapping VALUES (?, ?)",
+            (thread_ts, interactive_message_id),
+        )
         conn.commit()
         conn.close()
 
@@ -242,7 +273,7 @@ class SlackChatApp:
             ]
 
             # Send a message with the buttons
-            client.chat_postMessage(
+            response = self.app.client.chat_postMessage(
                 channel=body["event"]["channel"],
                 text="Please select a brain:",
                 blocks=[
@@ -257,10 +288,12 @@ class SlackChatApp:
                 ],
                 thread_ts=body["event"]["ts"],
             )
+            logger.info(f"Adding interactive message to thread  {thread_ts}")
+            self.set_interactive_message_id(response["ts"], thread_ts)
 
-            client.chat_postMessage(
+            response2 = self.app.client.chat_postMessage(
                 channel=body["event"]["channel"],
-                text="Or select any brain:",
+                text="Or let me choose for you:",
                 blocks=[
                     {
                         "type": "actions",
@@ -269,6 +302,9 @@ class SlackChatApp:
                 ],
                 thread_ts=body["event"]["ts"],
             )
+
+            logger.info(f"Adding interactive message to thread  {thread_ts}")
+            self.set_interactive_message_id(response2["ts"], thread_ts)
 
         else:
             self.ask_question(
@@ -328,8 +364,10 @@ class SlackChatApp:
             )
 
     def handle_iteractive_request(self, payload):
+
         brain_id = None
         action_id = payload["actions"][0]["action_id"]
+        logger.info(f"Payload: {payload}")
         if action_id.startswith("brain_"):
             brain_id = action_id.split("_")[1]
 
@@ -337,6 +375,12 @@ class SlackChatApp:
         logger.info(f"Thread TS: {thread_ts}")
         logger.info(f"Interactive Brain ID: {brain_id}")
         self.set_brain_id(thread_ts, brain_id)
+
+        self.app.client.chat_postMessage(
+            channel=payload["channel"]["id"],
+            text=f"Asking Question to {payload['actions'][0]['text']['text']}",
+            thread_ts=thread_ts,
+        )
 
         chat_id = self.get_chat_id(thread_ts)
         if not chat_id:
@@ -361,6 +405,16 @@ class SlackChatApp:
         logger.debug(question_response["assistant"])
         logger.debug(f"Brain ID: {question_response.get('brain_id')}")
         if "assistant" in question_response:
+            interactive_messages = self.get_all_interactive_message_ids_for_thread(
+                thread_ts
+            )
+            logger.info(f"Interactive messages: {interactive_messages}")
+            for message in interactive_messages:
+                logger.info(f"Deleting message: {message}")
+                self.app.client.chat_delete(
+                    channel=payload["channel"]["id"],
+                    ts=message[0],
+                )
             self.app.client.chat_postMessage(
                 channel=payload["channel"]["id"],
                 text=question_response["assistant"],
@@ -405,4 +459,4 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="warning", reload=True)
+    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="info", reload=True)
