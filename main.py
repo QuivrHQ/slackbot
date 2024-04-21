@@ -210,6 +210,7 @@ class SlackChatApp:
         thread_ts = body["event"].get("thread_ts", body["event"]["ts"])
         brain_id = self.get_brain_id(thread_ts)
         logger.info(f"Brain ID: {brain_id}")
+        logger.info(f"2 - Thread TS : {thread_ts}, Brain ID: {brain_id}")
 
         if not brain_id:
 
@@ -326,6 +327,55 @@ class SlackChatApp:
                 thread_ts=thread_ts,
             )
 
+    def handle_iteractive_request(self, payload):
+        brain_id = None
+        action_id = payload["actions"][0]["action_id"]
+        if action_id.startswith("brain_"):
+            brain_id = action_id.split("_")[1]
+
+        thread_ts = payload["container"]["thread_ts"]
+        logger.info(f"Thread TS: {thread_ts}")
+        logger.info(f"Interactive Brain ID: {brain_id}")
+        self.set_brain_id(thread_ts, brain_id)
+
+        chat_id = self.get_chat_id(thread_ts)
+        if not chat_id:
+            logger.info("Creating chat")
+            chat_data = {"name": "Slack Chat"}
+            chat_response = self.make_quivr_api_request("POST", "/chat", data=chat_data)
+            chat_id = chat_response["chat_id"]
+            self.set_chat_id(thread_ts, chat_id)
+
+        question = self.get_question(thread_ts)
+        params = {}
+        if brain_id == "00000000-0000-0000-0000-000000000000":
+            brain_id = None
+        params = {"brain_id": brain_id}
+        question_data = {
+            "question": question,
+        }
+        question_response = self.make_quivr_api_request(
+            "POST", f"/chat/{chat_id}/question", data=question_data, params=params
+        )
+
+        logger.debug(question_response["assistant"])
+        logger.debug(f"Brain ID: {question_response.get('brain_id')}")
+        if "assistant" in question_response:
+            self.app.client.chat_postMessage(
+                channel=payload["channel"]["id"],
+                text=question_response["assistant"],
+                thread_ts=thread_ts,
+            )
+            self.set_brain_id(thread_ts, question_response.get("brain_id"))
+        else:
+            self.app.client.chat_postMessage(
+                channel=payload["channel"]["id"],
+                text="Sorry, I couldn't find an answer.",
+                thread_ts=thread_ts,
+            )
+
+        return BoltResponse(status=200)
+
 
 # FastAPI app setup
 api = FastAPI()
@@ -349,58 +399,10 @@ async def interactive(req: Request, ack: Ack = Depends(Ack)):
     payload = json.loads(body_decoded.split("payload=")[1])
 
     ack()  # Acknowledge the request
-
-    brain_id = None
-    action_id = payload["actions"][0]["action_id"]
-    if action_id.startswith("brain_"):
-        brain_id = action_id.split("_")[1]
-
-    thread_ts = payload["container"]["thread_ts"]
-    logger.info(f"Thread TS: {thread_ts}")
-    logger.info(f"Interactive Brain ID: {brain_id}")
-    slack_chat_app.set_brain_id(thread_ts, brain_id)
-
-    chat_id = slack_chat_app.get_chat_id(thread_ts)
-    if not chat_id:
-        logger.info("Creating chat")
-        chat_data = {"name": "Slack Chat"}
-        chat_response = slack_chat_app.make_quivr_api_request(
-            "POST", "/chat", data=chat_data
-        )
-        chat_id = chat_response["chat_id"]
-        slack_chat_app.set_chat_id(thread_ts, chat_id)
-
-    question = slack_chat_app.get_question(thread_ts)
-    params = {}
-    if brain_id == "00000000-0000-0000-0000-000000000000":
-        brain_id = None
-    params = {"brain_id": brain_id}
-    question_data = {
-        "question": question,
-    }
-    question_response = slack_chat_app.make_quivr_api_request(
-        "POST", f"/chat/{chat_id}/question", data=question_data, params=params
-    )
-
-    logger.debug(question_response["assistant"])
-    logger.debug(f"Brain ID: {question_response.get('brain_id')}")
-    if "assistant" in question_response:
-        slack_chat_app.app.client.chat_postMessage(
-            channel=payload["channel"]["id"],
-            text=question_response["assistant"],
-            thread_ts=thread_ts,
-        )
-    else:
-        slack_chat_app.app.client.chat_postMessage(
-            channel=payload["channel"]["id"],
-            text="Sorry, I couldn't find an answer.",
-            thread_ts=thread_ts,
-        )
-
-    return BoltResponse(status=200)
+    return slack_chat_app.handle_iteractive_request(payload)
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="info", reload=True)
+    uvicorn.run("main:api", host="0.0.0.0", port=1234, log_level="warning", reload=True)
