@@ -342,8 +342,10 @@ class SlackChatApp:
         if brain_id == "00000000-0000-0000-0000-000000000000":
             brain_id = None
         params = {"brain_id": brain_id}
+        # Example message to remove: @U06V65Z7W4D What is quivr ? . Remove the user id @U06V65Z7W4D. Use a regex to match the user id that always starts with @ and followed by 9 characters.
+        clean_question_without_id = re.sub(r"@[\w\d]{9}", "", question)
         question_data = {
-            "question": question,
+            "question": clean_question_without_id,
         }
         question_response = self.make_quivr_api_request(
             "POST", f"/chat/{chat_id}/question", data=question_data, params=params
@@ -395,8 +397,9 @@ class SlackChatApp:
         if brain_id == "00000000-0000-0000-0000-000000000000":
             brain_id = None
         params = {"brain_id": brain_id}
+        clean_question_without_id = re.sub(r"@[\w\d]{9}", "", question)
         question_data = {
-            "question": question,
+            "question": clean_question_without_id,
         }
         question_response = self.make_quivr_api_request(
             "POST", f"/chat/{chat_id}/question", data=question_data, params=params
