@@ -364,22 +364,21 @@ class SlackChatApp:
                     )
                     question_response["assistant"] += f"\n\n*Sources:*\n{source_text}"
 
-            blocks = [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": question_response["assistant"],
-                    },
-                }
+            # Split the message if it's too long
+            messages = [
+                question_response["assistant"][i : i + 3000]
+                for i in range(0, len(question_response["assistant"]), 3000)
             ]
 
-            self.app.client.chat_postMessage(
-                channel=body["event"]["channel"],
-                text=question_response["assistant"],
-                blocks=blocks,
-                thread_ts=thread_ts,
-            )
+            for message in messages:
+                self.app.client.chat_postMessage(
+                    channel=body["event"]["channel"],
+                    text=message,
+                    blocks=[
+                        {"type": "section", "text": {"type": "mrkdwn", "text": message}}
+                    ],
+                    thread_ts=thread_ts,
+                )
         else:
             self.app.client.chat_postMessage(
                 channel=body["event"]["channel"],
@@ -451,22 +450,24 @@ class SlackChatApp:
                     )
                     question_response["assistant"] += f"\n\n*Sources:*\n{source_text}"
 
-            blocks = [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": question_response["assistant"],
-                    },
-                }
+            # Split the message if it's too long
+            messages = [
+                question_response["assistant"][i : i + 3000]
+                for i in range(0, len(question_response["assistant"]), 3000)
             ]
 
-            self.app.client.chat_postMessage(
-                channel=payload["channel"]["id"],
-                text=question_response["assistant"],
-                blocks=blocks,
-                thread_ts=thread_ts,
-            )
+            for message in messages:
+                self.app.client.chat_postMessage(
+                    channel=payload["channel"]["id"],
+                    text=message,
+                    blocks=[
+                        {
+                            "type": "section",
+                            "text": {"type": "mrkdwn", "text": message},
+                        }
+                    ],
+                    thread_ts=thread_ts,
+                )
             self.set_brain_id(thread_ts, question_response.get("brain_id"))
         else:
             self.app.client.chat_postMessage(
