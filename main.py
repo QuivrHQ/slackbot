@@ -362,7 +362,21 @@ class SlackChatApp:
                             for source in sources
                         ]
                     )
-                    question_response["assistant"] += f"\n\n*Sources:*\n{source_text}"
+                    # Send sources as a separate message
+                    self.app.client.chat_postMessage(
+                        channel=body["event"]["channel"],
+                        text=f"*Sources:*\n{source_text}",
+                        blocks=[
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": f"*Sources:*\n{source_text}",
+                                },
+                            }
+                        ],
+                        thread_ts=thread_ts,
+                    )
 
             # Split the message if it's too long
             messages = [
@@ -448,7 +462,21 @@ class SlackChatApp:
                             for source in sources
                         ]
                     )
-                    question_response["assistant"] += f"\n\n*Sources:*\n{source_text}"
+                    # Send sources as a separate message
+                    self.app.client.chat_postMessage(
+                        channel=body["event"]["channel"],
+                        text=f"*Sources:*\n{source_text}",
+                        blocks=[
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": f"*Sources:*\n{source_text}",
+                                },
+                            }
+                        ],
+                        thread_ts=thread_ts,
+                    )
 
             # Split the message if it's too long
             messages = [
