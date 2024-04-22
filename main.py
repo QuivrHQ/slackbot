@@ -442,7 +442,7 @@ class SlackChatApp:
                 )
             if "metadata" in question_response:
                 if "sources" in question_response["metadata"]:
-                    sources = question_response["metadata"]["sources"]
+                    sources = question_response["metadata"]["sources"][:3]
                     source_text = "\n".join(
                         [
                             f"- <{source['source_url']}|{source['name']}>"
