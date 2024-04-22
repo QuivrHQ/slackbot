@@ -464,7 +464,7 @@ class SlackChatApp:
                     )
                     # Send sources as a separate message
                     self.app.client.chat_postMessage(
-                        channel=body["event"]["channel"],
+                        channel=payload["channel"]["id"],
                         text=f"*Sources:*\n{source_text}",
                         blocks=[
                             {
