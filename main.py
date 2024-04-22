@@ -19,7 +19,7 @@ import json
 load_dotenv(override=True)
 
 # Quivr API configuration
-QUIVR_API_BASE_URL = "https://api.quivr.app"
+QUIVR_API_BASE_URL = os.environ.get("QUIVR_API_BASE_URL", "https://api.quivr.app")
 QUIVR_API_KEY = os.environ.get("QUIVR_API_KEY")
 
 # Database configuration
