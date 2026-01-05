@@ -2,3 +2,4 @@
 slack_chat.db
 __pycache__/**
 **/*.pyc
+.venv/
