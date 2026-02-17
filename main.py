@@ -38,7 +38,9 @@ class SlackChatApp:
     def __init__(self, config: Config):
         self.config = config
         self.app = App(
-            token=config.slack_bot_token, signing_secret=config.slack_signing_secret
+            token=config.slack_bot_token,
+            signing_secret=config.slack_signing_secret,
+            token_verification_enabled=False,
         )
         self.init_db()
         self.register_event_handlers()
@@ -512,6 +514,11 @@ api = FastAPI()
 config = Config()
 slack_chat_app = SlackChatApp(config)
 app_handler = SlackRequestHandler(slack_chat_app.app)
+
+
+@api.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @api.post("/slack/events")
